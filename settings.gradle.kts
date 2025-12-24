@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "CameraX"
 include(":app")
+include(":app:server")

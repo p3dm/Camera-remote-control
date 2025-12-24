@@ -1,41 +1,43 @@
 package com.example.camerax
 
 import android.Manifest
+import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.ContentValues
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
-import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.ImageCapture
-import androidx.camera.video.Recorder
-import androidx.camera.video.Recording
-import androidx.camera.video.VideoCapture
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.core.Preview
+import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
-import android.util.Log
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
 import androidx.camera.core.ImageCaptureException
 import androidx.camera.core.ImageProxy
-import androidx.camera.core.UseCase
-import androidx.camera.video.FallbackStrategy
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.MediaStoreOutputOptions
 import androidx.camera.video.Quality
 import androidx.camera.video.QualitySelector
+import androidx.camera.video.Recorder
+import androidx.camera.video.Recording
+import androidx.camera.video.VideoCapture
 import androidx.camera.video.VideoRecordEvent
+import androidx.core.content.ContextCompat
 import androidx.core.content.PermissionChecker
 import com.example.camerax.databinding.ActivityMainBinding
+import com.example.camerax.server.CameraSocketServer
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
 
 
 typealias LumaListener = (luma: Double) -> Unit
@@ -44,12 +46,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewBinding: ActivityMainBinding
 
     private var imageCapture: ImageCapture? = null
-
+    private var cameraSocketServer: CameraSocketServer? = null
+    private lateinit var cameraExecutor: ExecutorService
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
 
-    private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
 
+    private class LuminosityAnalyzer(private val listener: LumaListener) : ImageAnalysis.Analyzer {
         private fun ByteBuffer.toByteArray(): ByteArray {
             rewind()    // Rewind the buffer to zero
             val data = ByteArray(remaining())
@@ -69,33 +72,35 @@ class MainActivity : AppCompatActivity() {
             image.close()
         }
     }
-
-    private lateinit var cameraExecutor: ExecutorService
-
-    private val activityResultLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        permissions ->
-            // Handle Permission granted/rejected
-            var permissionGranted = true
-            permissions.entries.forEach {
-                if (it.key in REQUIRED_PERMISSIONS && !it.value)
-                    permissionGranted = false
-            }
-            if (!permissionGranted) {
-                Toast.makeText(baseContext,
-                    "Permission request denied",
-                    Toast.LENGTH_SHORT).show()
-            } else {
-                startCamera()
-            }
+    private val activityResultLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+        // Handle Permission granted/rejected
+        var permissionGranted = true
+        permissions.entries.forEach {
+            if (it.key in REQUIRED_PERMISSIONS && !it.value)
+                permissionGranted = false
         }
+        if (!permissionGranted) {
+            Toast.makeText(
+                baseContext,
+                "Permission request denied",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
+
         setContentView(viewBinding.root)
+
+        cameraExecutor = Executors.newSingleThreadExecutor()
+
         // Request camera permissions
         if (allPermissionsGranted()) {
             startCamera()
+            startSocketServer()
         } else {
             requestPermissions()
         }
@@ -103,14 +108,13 @@ class MainActivity : AppCompatActivity() {
         viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
         viewBinding.videoCaptureButton.setOnClickListener { captureVideo() }
 
-        cameraExecutor = Executors.newSingleThreadExecutor()
+
     }
 
     private fun takePhoto() {
-        // Get a stable reference of the modifiable image capture use case
+
         val imageCapture = imageCapture ?: return
 
-        // Create time stamped name and MediaStore entry.
         val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
             .format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
@@ -121,14 +125,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Create output options object which contains file + metadata
         val outputOptions = ImageCapture.OutputFileOptions
             .Builder(contentResolver,
                 MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
                 contentValues)
             .build()
 
-        // Set up image capture listener, which is triggered after photo has been taken
         imageCapture.takePicture(
             outputOptions,
             ContextCompat.getMainExecutor(this),
@@ -153,13 +155,11 @@ class MainActivity : AppCompatActivity() {
 
         val curRecording = recording
         if (curRecording != null) {
-            // Stop the current recording session.
             curRecording.stop()
             recording = null
             return
         }
 
-        // create and start a new recording session
         val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
             .format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
@@ -234,8 +234,7 @@ class MainActivity : AppCompatActivity() {
             videoCapture = VideoCapture.withOutput(recorder)
 
 
-            imageCapture = ImageCapture.Builder()
-                .build()
+            imageCapture = ImageCapture.Builder().build()
 
 //            val imageAnalyzer = ImageAnalysis.Builder()
 //                .build()
@@ -253,7 +252,7 @@ class MainActivity : AppCompatActivity() {
                 cameraProvider.unbindAll()
                 // Bind use cases to camera
                 cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, videoCapture)
+                    this, cameraSelector, preview,imageCapture, videoCapture)
 
 
             } catch(exc: Exception) {
@@ -272,10 +271,42 @@ class MainActivity : AppCompatActivity() {
             baseContext, it) == PackageManager.PERMISSION_GRANTED
     }
 
+    private fun startSocketServer(){
+        if(cameraSocketServer == null){
+            cameraSocketServer = CameraSocketServer(cameraExecutor) { command ->
+                runOnUiThread {
+                    handleRemoteCommand(command)
+                }
+            }
+            cameraSocketServer?.start()
+        }
+
+    }
+    private fun handleRemoteCommand(command: String) {
+        when (command.uppercase()) {
+            "TAKE_PHOTO" -> {
+                Log.d(TAG, "Executing takePhoto() via remote command.")
+                Toast.makeText(this, "Remote: Taking Photo", Toast.LENGTH_SHORT).show()
+                takePhoto()
+            }
+            "RECORD" -> {
+                Log.d(TAG, "Executing captureVideo() via remote command.")
+                val isRecording = recording != null
+                val action = if (isRecording) "Stopping" else "Starting"
+                Toast.makeText(this, "Remote: $action Video", Toast.LENGTH_SHORT).show()
+                captureVideo()
+            }
+            else -> {
+                Log.w(TAG, "Unknown command received: $command")
+            }
+        }
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
     }
+
 
     companion object {
         private const val TAG = "CameraXApp"
@@ -294,3 +325,5 @@ class MainActivity : AppCompatActivity() {
 
 
 }
+
+
