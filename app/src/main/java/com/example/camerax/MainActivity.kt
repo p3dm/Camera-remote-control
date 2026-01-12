@@ -38,6 +38,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import android.view.animation.AnimationUtils
+import androidx.annotation.RequiresApi
 
 
 typealias LumaListener = (luma: Double) -> Unit
@@ -88,15 +90,36 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private enum class CaptureMode {
+        PHOTO,
+        VIDEO
+    }
+    private var currentMode = CaptureMode.PHOTO
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         viewBinding = ActivityMainBinding.inflate(layoutInflater)
-
         setContentView(viewBinding.root)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
 
+        viewBinding.modeSelectorGroup.setOnCheckedChangeListener { _, _ ->
+            updateCaptureButtonUI()
+        }
+
+        viewBinding.photoViewButton.setOnClickListener {
+            openGallery()
+        }
+
+        viewBinding.captureButton.setOnClickListener{
+            if (currentMode == CaptureMode.PHOTO) {
+                takePhoto()
+                // Thêm hiệu ứng flash cho nút chụp
+                it.startAnimation(AnimationUtils.loadAnimation(this, android.R.anim.fade_in))
+            } else {
+                captureVideo()
+            }
+        }
         // Request camera permissions
         if (allPermissionsGranted()) {
             startCamera()
@@ -104,24 +127,49 @@ class MainActivity : AppCompatActivity() {
         } else {
             requestPermissions()
         }
-        // Set up the listeners for take photo and video capture buttons
-        viewBinding.imageCaptureButton.setOnClickListener { takePhoto() }
-        viewBinding.videoCaptureButton.setOnClickListener { captureVideo() }
 
+        updateCaptureButtonUI()
 
+    }
+    private fun updateCaptureButtonUI() {
+        runOnUiThread {
+            currentMode = if(viewBinding.modeSelectorGroup.checkedRadioButtonId == R.id.photo_mode_button){
+                CaptureMode.PHOTO
+            }else{
+                CaptureMode.VIDEO
+            }
+
+            viewBinding.captureButton.apply {
+                when (currentMode) {
+                    CaptureMode.PHOTO -> {
+                        setImageResource(0)
+                        setBackgroundResource(R.drawable.capture_button)
+                        contentDescription = context.getString(R.string.take_photo)
+                    }
+                    CaptureMode.VIDEO -> {
+                        val isRecording = recording != null
+                        // Use a conditional to select resources to avoid nested if-else blocks
+                        val backgroundRes = if (isRecording) R.drawable.recording_button else R.drawable.video_button
+                        val descriptionRes = if (isRecording) R.string.stop_capture else R.string.start_capture
+
+                        setBackgroundResource(backgroundRes)
+                        contentDescription = context.getString(descriptionRes)
+                    }
+                }
+            }
+        }
     }
 
     private fun takePhoto() {
-
         val imageCapture = imageCapture ?: return
 
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US)
-            .format(System.currentTimeMillis())
+        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US).format(System.currentTimeMillis())
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+            // QUAN TRỌNG: Dòng này sẽ tạo/lưu ảnh vào thư mục "Pictures/CameraX"
             if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/CameraX-Image")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "CameraX")
             }
         }
 
@@ -138,20 +186,27 @@ class MainActivity : AppCompatActivity() {
                 override fun onError(exc: ImageCaptureException) {
                     Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
                 }
-                override fun
-                        onImageSaved(output: ImageCapture.OutputFileResults){
+                override fun onImageSaved(output: ImageCapture.OutputFileResults){
+                    val savedUri = output.savedUri
+                    if (savedUri != null) {
+                        // Cập nhật thumbnail lên nút thư viện
+                        runOnUiThread {
+                            viewBinding.photoViewButton.setImageURI(savedUri)
+                            viewBinding.photoViewButton.clipToOutline = true
+                        }
+                    }
                     val msg = "Photo capture succeeded: ${output.savedUri}"
-                    Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
                     Log.d(TAG, msg)
                 }
             }
         )
     }
 
+    @RequiresApi(Build.VERSION_CODES.GINGERBREAD_MR1)
     private fun captureVideo() {
         val videoCapture = this.videoCapture ?: return
 
-        viewBinding.videoCaptureButton.isEnabled = false
+        viewBinding.modeSelectorGroup.isEnabled = false
 
         val curRecording = recording
         if (curRecording != null) {
@@ -166,7 +221,7 @@ class MainActivity : AppCompatActivity() {
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "Movies/CameraX-Video")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "CameraX")
             }
         }
 
@@ -187,17 +242,36 @@ class MainActivity : AppCompatActivity() {
             .start(ContextCompat.getMainExecutor(this)) { recordEvent ->
                 when(recordEvent) {
                     is VideoRecordEvent.Start -> {
-                        viewBinding.videoCaptureButton.apply {
-                            text = getString(R.string.stop_capture)
-                            isEnabled = true
-                        }
+                        updateCaptureButtonUI()
+                        viewBinding.modeSelectorGroup.isEnabled = false
                     }
                     is VideoRecordEvent.Finalize -> {
                         if (!recordEvent.hasError()) {
+                            recording = null
+                            updateCaptureButtonUI()
+                            viewBinding.modeSelectorGroup.isEnabled = true
+
+                            val savedUri = recordEvent.outputResults.outputUri
+                            if(savedUri != null){
+                                cameraExecutor.execute {
+                                    val retriever = android.media.MediaMetadataRetriever()
+                                    try{
+                                        retriever.setDataSource(this@MainActivity,savedUri)
+                                        val savedVideo = retriever.getFrameAtTime(0, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+                                        runOnUiThread {
+                                            viewBinding.photoViewButton.setImageBitmap(savedVideo)
+                                            viewBinding.photoViewButton.clipToOutline = true
+                                        }
+                                    }catch(e: Exception){
+                                        Log.e(TAG,"Lỗi xuất video: ${e.message}")
+                                    } finally {
+                                        retriever.release() //giải phóng frame khỏi bộ nhớ
+                                    }
+
+                                }
+                            }
                             val msg = "Video capture succeeded: " +
                                     "${recordEvent.outputResults.outputUri}"
-                            Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT)
-                                .show()
                             Log.d(TAG, msg)
                         } else {
                             recording?.close()
@@ -205,10 +279,9 @@ class MainActivity : AppCompatActivity() {
                             Log.e(TAG, "Video capture ends with error: " +
                                     "${recordEvent.error}")
                         }
-                        viewBinding.videoCaptureButton.apply {
-                            text = getString(R.string.start_capture)
-                            isEnabled = true
-                        }
+                        recording = null
+                        updateCaptureButtonUI()
+                        viewBinding.modeSelectorGroup.isEnabled = true
                     }
                 }
             }
@@ -262,6 +335,13 @@ class MainActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    private fun openGallery(){
+        val intent = Intent(Intent.ACTION_VIEW)
+        intent.type = "image/*"
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
+    }
+
     private fun requestPermissions() {
         activityResultLauncher.launch(REQUIRED_PERMISSIONS)
     }
@@ -285,15 +365,15 @@ class MainActivity : AppCompatActivity() {
     private fun handleRemoteCommand(command: String) {
         when (command.uppercase()) {
             "TAKE_PHOTO" -> {
+                viewBinding.photoModeButton.isChecked = true
                 Log.d(TAG, "Executing takePhoto() via remote command.")
-                Toast.makeText(this, "Remote: Taking Photo", Toast.LENGTH_SHORT).show()
                 takePhoto()
             }
             "RECORD" -> {
                 Log.d(TAG, "Executing captureVideo() via remote command.")
                 val isRecording = recording != null
                 val action = if (isRecording) "Stopping" else "Starting"
-                Toast.makeText(this, "Remote: $action Video", Toast.LENGTH_SHORT).show()
+                viewBinding.videoModeButton.isChecked = true
                 captureVideo()
             }
             else -> {
@@ -306,7 +386,6 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         cameraExecutor.shutdown()
     }
-
 
     companion object {
         private const val TAG = "CameraXApp"

@@ -1,45 +1,75 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
-        xmlns:app="http://schemas.android.com/apk/res-auto"
-        xmlns:tools="http://schemas.android.com/tools"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        tools:context=".MainActivity">
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    tools:context=".MainActivity">
 
+    <!-- Khung hiển thị camera, chiếm toàn bộ màn hình -->
     <androidx.camera.view.PreviewView
-            android:id="@+id/viewFinder"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" tools:layout_editor_absoluteY="43dp"
-            tools:layout_editor_absoluteX="-145dp"/>
-    <Button
-            android:id="@+id/image_capture_button"
-            android:layout_width="110dp"
-            android:layout_height="110dp"
-            android:layout_marginBottom="50dp"
-            android:layout_marginEnd="50dp"
-            android:elevation="2dp"
-            android:text="@string/take_photo"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintLeft_toLeftOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/vertical_centerline"/>
+        android:id="@+id/viewFinder"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:scaleType="fillCenter" />
 
-    <Button
-            android:id="@+id/video_capture_button"
-            android:layout_width="110dp"
-            android:layout_height="110dp"
-            android:layout_marginBottom="50dp"
-            android:layout_marginStart="50dp"
-            android:elevation="2dp"
-            android:text="@string/start_capture"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toEndOf="@id/vertical_centerline"/>
+    <!-- Thanh trượt để chọn chế độ. Dùng RadioGroup cho đơn giản và hiệu quả -->
+    <RadioGroup
+        android:id="@+id/mode_selector_group"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="16dp"
+        android:background="@drawable/mode_selector"
+        android:orientation="horizontal"
+        android:padding="4dp"
+        app:layout_constraintBottom_toTopOf="@id/capture_button"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
-    <androidx.constraintlayout.widget.Guideline
-            android:id="@+id/vertical_centerline"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            app:layout_constraintGuide_percent=".50"/>
+        <RadioButton
+            android:id="@+id/photo_mode_button"
+            style="@style/ModeSelectorButton"
+
+            android:text="@string/photo" />
+
+        <RadioButton
+            android:id="@+id/video_mode_button"
+            style="@style/ModeSelectorButton"
+            android:checked="true"
+            android:text="@string/video" />
+
+    </RadioGroup>
+    <!-- Nút xem thư viện -->
+    <ImageButton
+        android:id="@+id/photo_view_button"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:layout_marginEnd="60dp"
+        android:background="@drawable/photo_view_button"
+        android:scaleType="centerCrop"
+        android:contentDescription="Mở thư viện"
+        app:layout_constraintBottom_toBottomOf="@+id/capture_button"
+        app:layout_constraintEnd_toStartOf="@+id/capture_button"
+        app:layout_constraintTop_toTopOf="@+id/capture_button"
+
+        />
+
+    <!-- Nút chụp/quay chính -->
+    <ImageButton
+        android:id="@+id/capture_button"
+        android:layout_width="80dp"
+        android:layout_height="80dp"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/capture_button"
+        android:contentDescription="@string/stop_capture"
+        android:scaleType="center"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Khi nút được chọn, chữ màu đen -->
+    <item android:state_checked="true" android:color="@android:color/black" />
+    <!-- Mặc định, chữ màu trắng -->
+    <item android:color="@android:color/white" />
+</selector>

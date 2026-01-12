@@ -6,4 +6,15 @@
     </style>
 
     <style name="Theme.CameraX" parent="Base.Theme.CameraX"/>
+    <style name="ModeSelectorButton" parent="Widget.AppCompat.CompoundButton.RadioButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">36dp</item>
+        <item name="android:background">@drawable/mode_button_background</item>
+        <item name="android:button">@null</item> <!-- Ẩn nút tròn mặc định của RadioButton -->
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">16dp</item>
+        <item name="android:paddingEnd">16dp</item>
+        <item name="android:textColor">@color/mode_button_text_color</item>
+        <item name="android:textStyle">bold</item>
+    </style>
 </resources>

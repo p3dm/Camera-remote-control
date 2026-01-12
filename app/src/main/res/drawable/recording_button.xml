@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Layer 1: Hình tròn viền trắng (background) -->
+    <item>
+        <shape android:shape="oval">
+            <stroke android:width="4dp" android:color="#FFFFFF" />
+            <!-- Thêm solid nếu muốn nền trong tròn, ví dụ màu xám -->
+            <!-- <solid android:color="#CCCCCC" /> -->
+        </shape>
+    </item>
+
+    <!-- Layer 2: Hình vuông nhỏ màu đỏ ở giữa -->
+    <item
+        android:gravity="center">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF0000" />
+            <size android:width="40dp" android:height="40dp" />
+            <corners android:radius="3dp"/>
+        </shape>
+    </item>
+</layer-list>
