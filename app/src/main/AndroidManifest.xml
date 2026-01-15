@@ -27,6 +27,10 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity
+            android:name=".RemoteControlActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
         <service
             android:name=".server.CameraSocketService"
             android:enabled="true"

@@ -3,6 +3,6 @@
     android:shape="oval">
     <solid android:color="@android:color/white" />
     <stroke
-        android:width="4dp"
-        android:color="#4DFFFFFF" /> <!-- Màu xám trong suốt -->
+        android:width="2dp"
+        android:color="#000000" /> <!-- Màu xám trong suốt -->
 </shape>
