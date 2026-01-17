@@ -38,7 +38,6 @@ class CameraController(private val activity: MainActivity,
     private var imageCapture: ImageCapture? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var recording: Recording? = null
-
     private enum class CaptureMode {
         PHOTO,
         VIDEO,
@@ -51,6 +50,12 @@ class CameraController(private val activity: MainActivity,
     private var currentSite = CameraSite.BACK
     private var lensFacing = CameraSelector.LENS_FACING_BACK
 
+    private val recordingTimer = RecordingTimer { time ->
+        activity.runOnUiThread {
+            viewBinding.recordingTimeText.text = time
+            viewBinding.recordingTimeText.visibility = View.VISIBLE
+        }
+    }
     fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(activity)
 
@@ -189,11 +194,14 @@ class CameraController(private val activity: MainActivity,
             .start(ContextCompat.getMainExecutor(activity)) { recordEvent ->
                 when(recordEvent) {
                     is VideoRecordEvent.Start -> {
+                        recordingTimer.start()
                         updateCaptureButtonUI()
                         viewBinding.modeSelectorGroup.isEnabled = false
                     }
                     is VideoRecordEvent.Finalize -> {
                         if (!recordEvent.hasError()) {
+                            recordingTimer.stop()
+                            viewBinding.recordingTimeText.visibility = View.GONE
                             recording = null
                             updateCaptureButtonUI()
                             viewBinding.modeSelectorGroup.isEnabled = true
@@ -268,13 +276,6 @@ class CameraController(private val activity: MainActivity,
             }
         }
     }
-    fun isRecording(): Boolean = recording != null
-
-    fun startOrToggleVideoFromRemote() {
-        // Dùng lại captureVideo nhưng không có animation
-        captureVideo()
-    }
-
     fun switchToPhotoMode() {
         viewBinding.photoModeButton.isChecked = true
         currentMode = CaptureMode.PHOTO

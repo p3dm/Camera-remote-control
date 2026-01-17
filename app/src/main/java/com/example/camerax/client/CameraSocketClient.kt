@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class CameraSocketClient(
     private val serverHost: String,
-    private val port: Int,
+    private val serverPort: Int,
     private val listener: CameraClientListener,
 ) {
     private var socket: Socket? = null
@@ -48,8 +48,8 @@ class CameraSocketClient(
                 val clientSocket = Socket().apply {
                     keepAlive = true
                     tcpNoDelay = true
-                    soTimeout = 30000
-                    connect(InetSocketAddress(serverHost, port), 10000)
+                    soTimeout = 0
+                    connect(InetSocketAddress(serverHost, serverPort), 10000)
                 }
                 socket = clientSocket
                 writer = PrintWriter(
@@ -115,7 +115,7 @@ class CameraSocketClient(
 
     fun sendCommand(command: String){
         if(!isConnected.get()){
-            Log.d(TAG,"Không có kết nối nào")
+            Log.d(TAG,"No Connection")
             return
         }
 

@@ -71,19 +71,21 @@ class CameraSocketServer (
         try {
             clientSocket.use { socket ->
                 val reader = BufferedReader(InputStreamReader(socket.inputStream))
-                val command = reader.readLine()
 
                 val writer = PrintWriter(
                     BufferedWriter(OutputStreamWriter(socket.outputStream)),
                     true
                 )
+                writer.println("CONNECTED_TO_SERVER")
                 while (isRunning && !clientSocket.isClosed && hasClient.get()) {
                     val command = reader.readLine()
-
                     if (command == null) {
                         // Client đã ngắt kết nối
                         Log.d(TAG, "Client disconnected: ${clientSocket.inetAddress}")
                         break
+                    }else{
+                        commandHandler(command)
+                        writer.println("COMMAND_RECEIVED: $command")
                     }
                 }
             }

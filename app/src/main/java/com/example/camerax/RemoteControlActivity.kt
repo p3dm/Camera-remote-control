@@ -41,8 +41,6 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
         buttonTakePhoto = findViewById(R.id.buttonTakePhoto)
         buttonRecordToggle = findViewById(R.id.buttonRecordToggle)
         buttonSwitchCamera = findViewById(R.id.buttonSwitchCamera)
-
-
     }
 
     private fun setupListeners() {

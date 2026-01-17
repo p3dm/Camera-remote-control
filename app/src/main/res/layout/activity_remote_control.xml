@@ -51,9 +51,8 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:hint="Server IP Address"
+                android:hint="IP Address"
                 android:inputType="text"
-                android:text="192.168.1.100"
                 android:autofillHints="ipAddress"
                 android:layout_marginEnd="8dp"
                 android:padding="12dp"/>
