@@ -5,9 +5,7 @@ import android.util.Log
 import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.InputStreamReader
-import java.io.OutputStream
 import java.io.OutputStreamWriter
-import java.io.PrintStream
 import java.io.PrintWriter
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -44,15 +42,13 @@ class CameraSocketServer (
                                 BufferedWriter(
                                     OutputStreamWriter(clientSocket?.outputStream)),
                                 true)
+                            writer.println("SERVER_BUSY")
                         } else {
                             Log.d(TAG, "Client connected: ${clientSocket?.inetAddress}")
                             currentClientSocket = clientSocket
                             hasClient.set(true)
                             handleClient(clientSocket!!)
                         }
-
-
-
                     } catch (e: Exception) {
                         if (!isRunning || serverSocket?.isClosed == true) {
                             Log.d(TAG, "Server stopped")

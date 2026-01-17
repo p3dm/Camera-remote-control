@@ -30,7 +30,22 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:scaleType="fillCenter" />
+        app:scaleType="fillCenter" >
+        <TextView
+            android:id="@+id/recording_time_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="00:00"
+            android:textColor="@android:color/white"
+            android:textSize="48sp"
+            android:textStyle="bold"
+            android:padding="16dp"
+            android:background="#80000000"
+            android:visibility="gone"
+            android:fontFamily="monospace"
+            />
+    </androidx.camera.view.PreviewView>
 
     <!-- Thanh chọn chế độ -->
     <RadioGroup

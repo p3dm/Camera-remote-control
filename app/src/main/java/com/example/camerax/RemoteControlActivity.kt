@@ -111,12 +111,12 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
     }
 
     // CameraClientListener implementation
-    override fun onConnectionChanged(connected: Boolean) {
+    override fun onConnectionChanged(isConnected: Boolean) {
         runOnUiThread {
-            isConnected = connected
+            this.isConnected = isConnected
 
             // Cập nhật nút Connect/Disconnect
-            if (connected) {
+            if (isConnected) {
                 buttonConnect.text = "Disconnect"
                 editTextServerIp.isEnabled = false
             } else {
@@ -132,10 +132,10 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
             val controlButtons = listOf(
                 buttonTakePhoto, buttonRecordToggle, buttonSwitchCamera
             )
-            controlButtons.forEach { it.isEnabled = connected }
+            controlButtons.forEach { it.isEnabled = isConnected }
 
             // Cập nhật status
-            val status = if (connected) "✅ Connected successfully!" else "❌ Disconnected"
+            val status = if (isConnected) "✅ Connected successfully!" else "❌ Disconnected"
             updateStatus(status)
 
             Toast.makeText(this, status, Toast.LENGTH_SHORT).show()
