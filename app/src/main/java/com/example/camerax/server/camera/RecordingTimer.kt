@@ -32,10 +32,6 @@ class RecordingTimer(private val onTimeUpdate: (String)-> Unit) {
     fun stop(){
         isRunning = false
         handler.removeCallbacks(updateTask)
-    }
-
-    fun reset(){
-        stop()
         onTimeUpdate("00:00")
     }
 
