@@ -68,7 +68,7 @@ class MainActivity : AppCompatActivity() {
 
         remoteCommandHandler = RemoteCommandHandler(viewBinding,cameraController)
 
-        if (allPermissionsGranted()) {
+        if (permissionHelper.allPermissionsGranted()) {
             cameraController.startCamera()
         } else {
             permissionHelper.requestPermissions()
@@ -182,10 +182,6 @@ class MainActivity : AppCompatActivity() {
         cameraController.updateCaptureButtonUI()
     }
 
-    private fun allPermissionsGranted() = REQUIRED_PERMISSIONS.all {
-        ContextCompat.checkSelfPermission(
-            baseContext, it) == PackageManager.PERMISSION_GRANTED
-    }
 
     private fun startSocketServer(){
         if(cameraSocketServer == null){

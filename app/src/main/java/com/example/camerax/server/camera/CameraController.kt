@@ -53,7 +53,10 @@ class CameraController(private val activity: MainActivity,
     private val recordingTimer = RecordingTimer { time ->
         activity.runOnUiThread {
             viewBinding.recordingTimeText.text = time
-            viewBinding.recordingTimeText.visibility = View.VISIBLE
+            viewBinding.recordingDot.animate()
+                .alpha(if (viewBinding.recordingDot.alpha == 1f) 0.3f else 1f)
+                .setDuration(500)
+                .start()
         }
     }
     fun startCamera() {
@@ -108,7 +111,7 @@ class CameraController(private val activity: MainActivity,
             put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
             // QUAN TRỌNG: Dòng này sẽ tạo/lưu ảnh vào thư mục "Pictures/CameraX"
             if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "CameraX")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/CameraX")
             }
         }
 
@@ -173,7 +176,7 @@ class CameraController(private val activity: MainActivity,
             put(MediaStore.MediaColumns.DISPLAY_NAME, name)
             put(MediaStore.MediaColumns.MIME_TYPE, "video/mp4")
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Video.Media.RELATIVE_PATH, "CameraX")
+                put(MediaStore.Video.Media.RELATIVE_PATH, "DCIM/CameraX")
             }
         }
 
@@ -195,13 +198,14 @@ class CameraController(private val activity: MainActivity,
                 when(recordEvent) {
                     is VideoRecordEvent.Start -> {
                         recordingTimer.start()
+                        viewBinding.recordingIndicator.visibility = View.VISIBLE
                         updateCaptureButtonUI()
                         viewBinding.modeSelectorGroup.isEnabled = false
                     }
                     is VideoRecordEvent.Finalize -> {
                         if (!recordEvent.hasError()) {
                             recordingTimer.stop()
-                            viewBinding.recordingTimeText.visibility = View.GONE
+                            viewBinding.recordingIndicator.visibility = View.GONE
                             recording = null
                             updateCaptureButtonUI()
                             viewBinding.modeSelectorGroup.isEnabled = true

@@ -16,7 +16,6 @@ class RecordingTimer(private val onTimeUpdate: (String)-> Unit) {
                 val elapsed = System.currentTimeMillis() - startTime
                 onTimeUpdate(formatTime(elapsed))
                 handler.postDelayed(this, 1000 )
-
             }
         }
     }

@@ -24,6 +24,11 @@ class RemoteCommandHandler(
                 viewBinding.captureButton.performClick()
             }
 
+            "FLIP_CAMERA" -> {
+                Log.d(TAG, "Executing flipCamera() via remote command.")
+                cameraController.flipCamera()
+            }
+
             else -> {
                 Log.w(TAG, "Unknown command received: $command")
             }
