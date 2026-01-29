@@ -27,8 +27,8 @@ data class Message(
 )
 
 data class Room(
-    var server: CameraSession? = null,
-    var client: CameraSession? = null
+    val server: CameraSession? = null,
+    val client: CameraSession? = null
 )
 
 data class CameraSession(
@@ -42,62 +42,97 @@ object RoomManager {
     private val sessionToDeviceType = ConcurrentHashMap<DefaultWebSocketSession, String>()
 
     suspend fun createOrJoinRoom(session: DefaultWebSocketSession, pin: String, deviceType: String): String {
-        val room = rooms.getOrPut(pin) { Room() }
-        
-        return when (deviceType) {
+        when (deviceType) {
             "SERVER" -> {
-                if (room.server != null) {
-                    "ERROR: Room already has a server"
-                } else {
-                    room.server = CameraSession(session, deviceType)
-                    sessionToRoom[session] = pin
-                    sessionToDeviceType[session] = deviceType
-                    logger.info("Server created/joined room: $pin")
-                    
-                    // Notify server that room is created
-                    val response = Message(type = "ROOM_CREATED", pin = pin)
-                    session.send(Frame.Text(Json.encodeToString(response)))
-                    
-                    // If client already in room, notify server
-                    if (room.client != null) {
-                        val clientConnected = Message(type = "CLIENT_CONNECTED")
-                        session.send(Frame.Text(Json.encodeToString(clientConnected)))
+                // Try to create room with server
+                var errorMsg: String? = null
+                val room = rooms.compute(pin) { _, existingRoom ->
+                    val r = existingRoom ?: Room()
+                    if (r.server != null) {
+                        errorMsg = "ERROR: Room already has a server"
+                        existingRoom // Don't modify if server already exists
+                    } else {
+                        r.copy(server = CameraSession(session, deviceType))
                     }
-                    "SUCCESS"
                 }
+                
+                if (errorMsg != null) {
+                    return errorMsg!!
+                }
+                
+                sessionToRoom[session] = pin
+                sessionToDeviceType[session] = deviceType
+                logger.info("Server created/joined room: $pin")
+                
+                // Notify server that room is created
+                val response = Message(type = "ROOM_CREATED", pin = pin)
+                session.send(Frame.Text(Json.encodeToString(response)))
+                
+                // If client already in room, notify server
+                if (room?.client != null) {
+                    val clientConnected = Message(type = "CLIENT_CONNECTED")
+                    session.send(Frame.Text(Json.encodeToString(clientConnected)))
+                }
+                return "SUCCESS"
             }
             "CLIENT" -> {
-                if (room.client != null) {
-                    "ERROR: Room already has a client"
-                } else if (room.server == null) {
-                    "ERROR: No server in room. Server must create room first."
-                } else {
-                    room.client = CameraSession(session, deviceType)
-                    sessionToRoom[session] = pin
-                    sessionToDeviceType[session] = deviceType
-                    logger.info("Client joined room: $pin")
-                    
-                    // Notify client they're connected
-                    val response = Message(type = "CONNECTED", pin = pin)
-                    session.send(Frame.Text(Json.encodeToString(response)))
-                    
-                    // Notify server that client has connected
-                    room.server?.session?.send(Frame.Text(Json.encodeToString(Message(type = "CLIENT_CONNECTED"))))
-                    "SUCCESS"
+                // Try to join room as client
+                var errorMsg: String? = null
+                val room = rooms.compute(pin) { _, existingRoom ->
+                    if (existingRoom == null) {
+                        errorMsg = "ERROR: No server in room. Server must create room first."
+                        null
+                    } else if (existingRoom.client != null) {
+                        errorMsg = "ERROR: Room already has a client"
+                        existingRoom // Don't modify
+                    } else if (existingRoom.server == null) {
+                        errorMsg = "ERROR: No server in room. Server must create room first."
+                        existingRoom
+                    } else {
+                        existingRoom.copy(client = CameraSession(session, deviceType))
+                    }
                 }
+                
+                if (errorMsg != null) {
+                    return errorMsg!!
+                }
+                
+                if (room == null) {
+                    return "ERROR: No server in room. Server must create room first."
+                }
+                
+                sessionToRoom[session] = pin
+                sessionToDeviceType[session] = deviceType
+                logger.info("Client joined room: $pin")
+                
+                // Notify client they're connected
+                val response = Message(type = "CONNECTED", pin = pin)
+                session.send(Frame.Text(Json.encodeToString(response)))
+                
+                // Notify server that client has connected
+                room.server?.session?.send(Frame.Text(Json.encodeToString(Message(type = "CLIENT_CONNECTED"))))
+                return "SUCCESS"
             }
-            else -> "ERROR: Invalid device type. Use SERVER or CLIENT"
+            else -> return "ERROR: Invalid device type. Use SERVER or CLIENT"
         }
     }
 
     suspend fun sendCommand(session: DefaultWebSocketSession, message: Message) {
-        val pin = sessionToRoom[session] ?: run {
+        val pin = sessionToRoom[session]
+        if (pin == null) {
             logger.warn("Session not in any room")
+            session.send(Frame.Text(Json.encodeToString(
+                Message(type = "ERROR", message = "Not in a room")
+            )))
             return
         }
         
-        val room = rooms[pin] ?: run {
+        val room = rooms[pin]
+        if (room == null) {
             logger.warn("Room $pin not found")
+            session.send(Frame.Text(Json.encodeToString(
+                Message(type = "ERROR", message = "Room not found")
+            )))
             return
         }
         
@@ -106,13 +141,27 @@ object RoomManager {
         when (deviceType) {
             "CLIENT" -> {
                 // Client sending command to server
-                room.server?.session?.send(Frame.Text(Json.encodeToString(message)))
-                logger.info("Command sent from client to server in room $pin: ${message.command}")
+                val server = room.server
+                if (server != null) {
+                    server.session.send(Frame.Text(Json.encodeToString(message)))
+                    logger.info("Command sent from client to server in room $pin: ${message.command}")
+                } else {
+                    session.send(Frame.Text(Json.encodeToString(
+                        Message(type = "ERROR", message = "Server not connected")
+                    )))
+                }
             }
             "SERVER" -> {
                 // Server sending response to client
-                room.client?.session?.send(Frame.Text(Json.encodeToString(message)))
-                logger.info("Response sent from server to client in room $pin")
+                val client = room.client
+                if (client != null) {
+                    client.session.send(Frame.Text(Json.encodeToString(message)))
+                    logger.info("Response sent from server to client in room $pin")
+                } else {
+                    session.send(Frame.Text(Json.encodeToString(
+                        Message(type = "ERROR", message = "Client not connected")
+                    )))
+                }
             }
         }
     }
@@ -121,27 +170,50 @@ object RoomManager {
         val pin = sessionToRoom.remove(session) ?: return
         val deviceType = sessionToDeviceType.remove(session)
         
-        val room = rooms[pin] ?: return
+        // Get the room before modification to notify other party
+        val roomBeforeRemoval = rooms[pin]
         
-        when (deviceType) {
-            "SERVER" -> {
-                room.server = null
-                // Notify client that server disconnected
-                room.client?.session?.send(Frame.Text(Json.encodeToString(Message(type = "SERVER_DISCONNECTED"))))
-                logger.info("Server disconnected from room $pin")
-            }
-            "CLIENT" -> {
-                room.client = null
-                // Notify server that client disconnected
-                room.server?.session?.send(Frame.Text(Json.encodeToString(Message(type = "CLIENT_DISCONNECTED"))))
-                logger.info("Client disconnected from room $pin")
+        // Update the room atomically
+        rooms.compute(pin) { _, room ->
+            if (room == null) {
+                null
+            } else {
+                when (deviceType) {
+                    "SERVER" -> {
+                        logger.info("Server disconnected from room $pin")
+                        val updated = room.copy(server = null)
+                        // Return null to remove empty rooms
+                        if (updated.client == null) {
+                            logger.info("Room $pin removed (empty)")
+                            null
+                        } else {
+                            updated
+                        }
+                    }
+                    "CLIENT" -> {
+                        logger.info("Client disconnected from room $pin")
+                        val updated = room.copy(client = null)
+                        // Return null to remove empty rooms
+                        if (updated.server == null) {
+                            logger.info("Room $pin removed (empty)")
+                            null
+                        } else {
+                            updated
+                        }
+                    }
+                    else -> room
+                }
             }
         }
         
-        // Clean up empty rooms
-        if (room.server == null && room.client == null) {
-            rooms.remove(pin)
-            logger.info("Room $pin removed (empty)")
+        // Send notifications after room update
+        when (deviceType) {
+            "SERVER" -> {
+                roomBeforeRemoval?.client?.session?.send(Frame.Text(Json.encodeToString(Message(type = "SERVER_DISCONNECTED"))))
+            }
+            "CLIENT" -> {
+                roomBeforeRemoval?.server?.session?.send(Frame.Text(Json.encodeToString(Message(type = "CLIENT_DISCONNECTED"))))
+            }
         }
     }
 
@@ -163,8 +235,8 @@ fun Application.module() {
     install(WebSockets) {
         pingPeriod = Duration.ofSeconds(15)
         timeout = Duration.ofSeconds(30)
-        maxFrameSize = Long.MAX_VALUE
-        masking = false
+        maxFrameSize = 1024 * 1024 // 1MB limit for JSON messages
+        masking = true
     }
 
     routing {
