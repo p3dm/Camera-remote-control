@@ -199,7 +199,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
-        private const val TAG = "CameraXApp"
         val REQUIRED_PERMISSIONS =
             mutableListOf(
                 Manifest.permission.CAMERA,
