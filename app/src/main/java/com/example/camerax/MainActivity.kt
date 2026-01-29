@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var remoteCommandHandler: RemoteCommandHandler
     private var cameraSocketServer: CameraSocketServer? = null
     private var isServerRunning = false
+    private var serverInfoDialog: AlertDialog? = null
 
     private val activityResultLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
         var permissionGranted = permissionHelper.handlePermissionResult(permissions)
@@ -63,7 +64,10 @@ class MainActivity : AppCompatActivity() {
 
         setupUI()
 
-        remoteCommandHandler = RemoteCommandHandler(viewBinding,cameraController)
+        remoteCommandHandler = RemoteCommandHandler(viewBinding, cameraController) { imageBytes ->
+            // Callback khi chụp ảnh xong - gửi ảnh về client
+            cameraSocketServer?.sendImage(imageBytes)
+        }
 
         if (permissionHelper.allPermissionsGranted()) {
             cameraController.startCamera()
@@ -110,16 +114,19 @@ class MainActivity : AppCompatActivity() {
         if(cameraSocketServer == null){
             cameraSocketServer = CameraSocketServer(
                 cameraExecutor,
-                {command ->
-                runOnUiThread{
-                    remoteCommandHandler.handleRemoteCommand(command)
+                { command ->
+                    runOnUiThread{
+                        remoteCommandHandler.handleRemoteCommand(command)
+                    }
+                },
+                { // onClientConnected callback
+                    runOnUiThread{
+                        serverInfoDialog?.dismiss()
+                        serverInfoDialog = null
+                        Toast.makeText(this, "Client connected!", Toast.LENGTH_SHORT).show()
+                    }
                 }
-            },
-                {onPhotoRequested ->
-                runOnUiThread{
-                    cameraController.takePhoto(onPhotoRequested)
-                }
-            })
+            )
 
             cameraSocketServer?.start()
             isServerRunning = true
@@ -138,7 +145,7 @@ class MainActivity : AppCompatActivity() {
     private fun showServerInfoDialog() {
         val ipAddress = cameraSocketServer?.getLocalIpAddress() ?: "Unknown"
 
-        AlertDialog.Builder(this)
+        serverInfoDialog = AlertDialog.Builder(this)
             .setTitle("Server Running")
             .setMessage(
                 "Server is now listening on:\n\n" +

@@ -102,46 +102,111 @@ class CameraController(private val activity: MainActivity,
             }
         }, ContextCompat.getMainExecutor(activity))
     }
-    fun takePhoto() {
-        val imageCapture = imageCapture ?: return
-
-        val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US).format(System.currentTimeMillis())
-        val contentValues = ContentValues().apply {
-            put(MediaStore.MediaColumns.DISPLAY_NAME, name)
-            put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
-            // QUAN TRỌNG: Dòng này sẽ tạo/lưu ảnh vào thư mục "Pictures/CameraX"
-            if(Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
-                put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/CameraX")
-            }
+    fun takePhoto(onImageCaptured: ((ByteArray) -> Unit)? = null) {
+        Log.d(TAG, "takePhoto called, onImageCaptured is ${if (onImageCaptured != null) "provided" else "null"}")
+        val imageCapture = imageCapture ?: run {
+            Log.e(TAG, "imageCapture is null, cannot take photo")
+            return
         }
 
-        val outputOptions = ImageCapture.OutputFileOptions
-            .Builder(activity.contentResolver,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                contentValues)
-            .build()
-
-        imageCapture.takePicture(
-            outputOptions,
-            ContextCompat.getMainExecutor(activity),
-            object : ImageCapture.OnImageSavedCallback {
-                override fun onError(exc: ImageCaptureException) {
-                    Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
-                }
-                override fun onImageSaved(output: ImageCapture.OutputFileResults){
-                    val savedUri = output.savedUri
-                    if (savedUri != null) {
-                        // Cập nhật thumbnail lên nút thư viện
-                        activity.runOnUiThread {
-                            viewBinding.photoViewButton.setImageURI(savedUri)
-                            viewBinding.photoViewButton.clipToOutline = true
-                        }
-                    }
-                    val msg = "Photo capture succeeded: ${output.savedUri}"
-                    Log.d(TAG, msg)
+        if (onImageCaptured != null) {
+            Log.d(TAG, "Remote mode: capturing to file first")
+            // Remote mode: capture to file first, then read bytes
+            val name = SimpleDateFormat(FILENAME_FORMAT, Locale.US).format(System.currentTimeMillis())
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/CameraX")
                 }
             }
-        )
+
+            val outputOptions = ImageCapture.OutputFileOptions
+                .Builder(
+                    activity.contentResolver,
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    contentValues
+                )
+                .build()
+
+            imageCapture.takePicture(
+                outputOptions,
+                ContextCompat.getMainExecutor(activity),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onError(exc: ImageCaptureException) {
+                        Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+                    }
+
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        val savedUri = output.savedUri
+                        Log.d(TAG, "Photo saved: $savedUri")
+
+                        // Read bytes from saved file and send to client
+                        savedUri?.let { uri ->
+                            try {
+                                val inputStream = activity.contentResolver.openInputStream(uri)
+                                val bytes = inputStream?.readBytes()
+                                inputStream?.close()
+
+                                if (bytes != null) {
+                                    Log.d(TAG, "Image bytes read: ${bytes.size}")
+                                    onImageCaptured(bytes)
+                                }
+
+                                // Update thumbnail
+                                activity.runOnUiThread {
+                                    viewBinding.photoViewButton.setImageURI(uri)
+                                    viewBinding.photoViewButton.clipToOutline = true
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error reading image bytes", e)
+                            }
+                        }
+                    }
+                }
+            )
+        } else {
+            val name =
+                SimpleDateFormat(FILENAME_FORMAT, Locale.US).format(System.currentTimeMillis())
+            val contentValues = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "image/jpeg")
+                // QUAN TRỌNG: Dòng này sẽ tạo/lưu ảnh vào thư mục "Pictures/CameraX"
+                if (Build.VERSION.SDK_INT > Build.VERSION_CODES.P) {
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "DCIM/CameraX")
+                }
+            }
+
+            val outputOptions = ImageCapture.OutputFileOptions
+                .Builder(
+                    activity.contentResolver,
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    contentValues)
+                .build()
+
+            imageCapture.takePicture(
+                outputOptions,
+                ContextCompat.getMainExecutor(activity),
+                object : ImageCapture.OnImageSavedCallback {
+                    override fun onError(exc: ImageCaptureException) {
+                        Log.e(TAG, "Photo capture failed: ${exc.message}", exc)
+                    }
+
+                    override fun onImageSaved(output: ImageCapture.OutputFileResults) {
+                        val savedUri = output.savedUri
+                        if (savedUri != null) {
+                            // Cập nhật thumbnail lên nút thư viện
+                            activity.runOnUiThread {
+                                viewBinding.photoViewButton.setImageURI(savedUri)
+                                viewBinding.photoViewButton.clipToOutline = true
+                            }
+                        }
+                        val msg = "Photo capture succeeded: ${output.savedUri}"
+                        Log.d(TAG, msg)
+                    }
+                }
+            )
+        }
     }
     fun onCaptureButtonClicked(view: View) {
         if (currentMode == CaptureMode.PHOTO) {

@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class CameraSocketServer (
     private val executor: ExecutorService,
     private val commandHandler: (String) -> Unit,
-    private val onPhotoRequested: ((ByteArray) -> Unit) -> Unit
+    private val onClientConnected: () -> Unit = {}
 ) {
     companion object {
         private const val TAG = "CameraSocketServer"
@@ -48,6 +48,7 @@ class CameraSocketServer (
                             Log.d(TAG, "Client connected: ${clientSocket?.inetAddress}")
                             currentClientSocket = clientSocket
                             hasClient.set(true)
+                            onClientConnected()
                             handleClient(clientSocket!!)
                         }
                     } catch (e: Exception) {
@@ -81,16 +82,12 @@ class CameraSocketServer (
                         // Client đã ngắt kết nối
                         Log.d(TAG, "Client disconnected: ${clientSocket.inetAddress}")
                         break
-                    }else{
-                        if (command == "TAKE_PHOTO") {
-                            commandHandler(command)
-                            onPhotoRequested { imageBytes ->
-                                Log.d(TAG, "Image captured, size: ${imageBytes.size} bytes")
-                                sendImage(imageBytes)
-                                 clientWriter?.println("RECEIVE IMAGE")
-                            }
-                        } else {
-                            commandHandler(command)
+                    } else {
+                        Log.d(TAG, "Received command: $command")
+                        commandHandler(command)
+
+                        // Send confirmation for non-photo commands
+                        if (command != "TAKE_PHOTO") {
                             clientWriter?.println("COMMAND_EXECUTED: $command")
                         }
                     }
@@ -112,24 +109,35 @@ class CameraSocketServer (
             Log.d(TAG, "No client connected")
             return
         }
-        try{
-            currentClientSocket?.let{ socket ->
-                val outputStream = socket.getOutputStream()
 
-                // Remove the space after IMAGE: to match client parsing
-                clientWriter?.println("IMAGE:${imageBytes.size}")
-                clientWriter?.flush()
+        // Use separate thread to avoid blocking executor (which is used by handleClient)
+        Thread {
+            try{
+                currentClientSocket?.let{ socket ->
+                    if (socket.isClosed) {
+                        Log.e(TAG, "Socket is closed")
+                        return@Thread
+                    }
 
-                Thread.sleep(100)
+                    val outputStream = socket.getOutputStream()
 
-                outputStream.write(imageBytes)
-                outputStream.flush()
+                    // Send header with image size (no space after colon)
+                    val header = "IMAGE:${imageBytes.size}"
+                    Log.d(TAG, "Sending header: $header")
+                    clientWriter?.println(header)
+                    clientWriter?.flush()
 
-                Log.d(TAG, "Image sent successfully: ${imageBytes.size} bytes")
+                    Thread.sleep(50)
+
+                    outputStream.write(imageBytes)
+                    outputStream.flush()
+
+                    Log.d(TAG, "Image sent successfully: ${imageBytes.size} bytes")
+                }
+            }catch (e: Exception){
+                Log.e(TAG, "Error sending image", e)
             }
-        }catch (e: Exception){
-            Log.e(TAG, "Error sending image", e)
-        }
+        }.start()
     }
 
     fun getLocalIpAddress(): String {

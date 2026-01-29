@@ -143,9 +143,14 @@ class CameraSocketClient(
                     Log.d(TAG, "Message received: $message")
 
                     if(message.startsWith("IMAGE:")){
-                        val imageSize = message.substringAfter("IMAGE:").toIntOrNull()
+                        val sizeStr = message.substringAfter("IMAGE:")
+                        Log.d(TAG, "Received IMAGE header, size string: '$sizeStr'")
+                        val imageSize = sizeStr.trim().toIntOrNull()
                         if(imageSize != null && imageSize > 0){
+                            Log.d(TAG, "Starting to receive image of $imageSize bytes")
                             receiveImage(inputStream!!,imageSize)
+                        } else {
+                            Log.e(TAG, "Invalid image size: $sizeStr")
                         }
                     } else {
                         handleServerMessage(message)
@@ -177,10 +182,14 @@ class CameraSocketClient(
                 val bytesRead = inputStream.read(imageBytes, totalRead, imageSize - totalRead)
                 if(bytesRead == -1) break
                 totalRead += bytesRead
+                Log.d(TAG, "Image receive progress: $totalRead / $imageSize bytes")
             }
 
             if(totalRead == imageSize){
+                Log.d(TAG, "Image received successfully: $imageSize bytes")
                 listener.onImageReceived(imageBytes)
+            } else {
+                Log.e(TAG, "Image incomplete: received $totalRead of $imageSize bytes")
             }
         }catch (e: Exception){
             Log.e(TAG, "Error receiving image", e)

@@ -6,17 +6,22 @@ import com.example.camerax.server.camera.CameraController
 
 class RemoteCommandHandler(
     private val viewBinding: ActivityMainBinding,
-    private val cameraController: CameraController
+    private val cameraController: CameraController,
+    private val onPhotoCaptured: ((ByteArray) -> Unit)? = null
 ) {
 
     fun handleRemoteCommand(command: String) {
+        Log.d(TAG, "handleRemoteCommand called with: $command")
         when (command.uppercase()) {
             "TAKE_PHOTO" -> {
                 cameraController.switchToPhotoMode()
                 Log.d(TAG, "Executing takePhoto() via remote command.")
-                // gọi trực tiếp logic chụp
-                viewBinding.captureButton.performClick()
-
+                // Chụp ảnh với callback để gửi ảnh về client
+                cameraController.takePhoto { imageBytes ->
+                    Log.d(TAG, "Photo captured, ${imageBytes.size} bytes, calling onPhotoCaptured")
+                    onPhotoCaptured?.invoke(imageBytes)
+                    Log.d(TAG, "onPhotoCaptured invoked")
+                }
             }
 
             "RECORD" -> {
