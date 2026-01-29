@@ -14,7 +14,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class CameraSocketServer (
     private val executor: ExecutorService,
-    private val commandHandler: (String) -> Unit
+    private val commandHandler: (String) -> Unit,
+    private val onPhotoRequested: ((ByteArray) -> Unit) -> Unit
 ) {
     companion object {
         private const val TAG = "CameraSocketServer"
@@ -23,9 +24,9 @@ class CameraSocketServer (
 
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
-
     private var currentClientSocket: Socket? = null
     private val hasClient = AtomicBoolean(false)
+    private var clientWriter: PrintWriter? = null
 
     fun start(){
         executor.execute {
@@ -68,11 +69,12 @@ class CameraSocketServer (
             clientSocket.use { socket ->
                 val reader = BufferedReader(InputStreamReader(socket.inputStream))
 
-                val writer = PrintWriter(
+                 clientWriter = PrintWriter(
                     BufferedWriter(OutputStreamWriter(socket.outputStream)),
                     true
                 )
-                writer.println("CONNECTED_TO_SERVER")
+                clientWriter?.println("CONNECTED_TO_SERVER")
+
                 while (isRunning && !clientSocket.isClosed && hasClient.get()) {
                     val command = reader.readLine()
                     if (command == null) {
@@ -80,13 +82,53 @@ class CameraSocketServer (
                         Log.d(TAG, "Client disconnected: ${clientSocket.inetAddress}")
                         break
                     }else{
-                        commandHandler(command)
-                        writer.println("COMMAND_RECEIVED: $command")
+                        if (command == "TAKE_PHOTO") {
+                            commandHandler(command)
+                            onPhotoRequested { imageBytes ->
+                                Log.d(TAG, "Image captured, size: ${imageBytes.size} bytes")
+                                sendImage(imageBytes)
+                                 clientWriter?.println("RECEIVE IMAGE")
+                            }
+                        } else {
+                            commandHandler(command)
+                            clientWriter?.println("COMMAND_EXECUTED: $command")
+                        }
                     }
                 }
             }
         }catch(e: Exception){
             Log.e(TAG, "Error: Handling client", e)
+        }finally {
+            hasClient.set(false)
+            currentClientSocket = null
+            clientWriter?.close()
+            clientWriter = null
+            Log.d(TAG, "Client session ended, ready for new connections")
+        }
+    }
+
+    fun sendImage(imageBytes: ByteArray){
+        if(!hasClient.get() || currentClientSocket == null){
+            Log.d(TAG, "No client connected")
+            return
+        }
+        try{
+            currentClientSocket?.let{ socket ->
+                val outputStream = socket.getOutputStream()
+
+                // Remove the space after IMAGE: to match client parsing
+                clientWriter?.println("IMAGE:${imageBytes.size}")
+                clientWriter?.flush()
+
+                Thread.sleep(100)
+
+                outputStream.write(imageBytes)
+                outputStream.flush()
+
+                Log.d(TAG, "Image sent successfully: ${imageBytes.size} bytes")
+            }
+        }catch (e: Exception){
+            Log.e(TAG, "Error sending image", e)
         }
     }
 
@@ -133,7 +175,6 @@ class CameraSocketServer (
         hasClient.set(false)
         serverSocket?.close()
         serverSocket = null
-
     }
 }
 

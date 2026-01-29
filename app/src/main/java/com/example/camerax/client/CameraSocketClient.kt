@@ -1,7 +1,9 @@
 package com.example.camerax.client
 
 import android.util.Log
+import java.io.BufferedInputStream
 import java.io.BufferedReader
+import java.io.InputStream
 import java.io.InputStreamReader
 import java.io.OutputStreamWriter
 import java.io.PrintWriter
@@ -69,12 +71,9 @@ class CameraSocketClient(
                 Log.i(TAG, "Connected successfully")
                 listener.onConnectionChanged(true)
 
-                // Gửi message khởi tạo
                 sendCommand("CLIENT_CONNECTED")
 
-                // Start listening for responses (nếu server trả về messages)
                 startListening()
-
 
             }catch(e: Exception) {
                 Log.e(TAG, "Error connecting to server: ${e.message}", e)
@@ -98,7 +97,7 @@ class CameraSocketClient(
         executor.execute {
             try{
                 isConnected.set(false)
-
+                writer?.println("DISCONNECT")
                 writer?.close()
                 reader?.close()
                 socket?.close()
@@ -130,6 +129,8 @@ class CameraSocketClient(
     private fun startListening() {
         executor.execute {
             try {
+                val inputStream = socket?.getInputStream()
+
                 while (isConnected.get() && !Thread.currentThread().isInterrupted) {
                     val message = reader?.readLine()
 
@@ -140,7 +141,15 @@ class CameraSocketClient(
                     }
 
                     Log.d(TAG, "Message received: $message")
-                    handleServerMessage(message)
+
+                    if(message.startsWith("IMAGE:")){
+                        val imageSize = message.substringAfter("IMAGE:").toIntOrNull()
+                        if(imageSize != null && imageSize > 0){
+                            receiveImage(inputStream!!,imageSize)
+                        }
+                    } else {
+                        handleServerMessage(message)
+                    }
                     if(!isConnected.get()){
                         break
                     }
@@ -156,6 +165,26 @@ class CameraSocketClient(
             } finally{
                 disconnect()
             }
+        }
+    }
+
+    private fun receiveImage(inputStream: InputStream, imageSize: Int){
+        try{
+            val imageBytes = ByteArray(imageSize)
+            var totalRead  = 0
+
+            while(totalRead < imageSize){
+                val bytesRead = inputStream.read(imageBytes, totalRead, imageSize - totalRead)
+                if(bytesRead == -1) break
+                totalRead += bytesRead
+            }
+
+            if(totalRead == imageSize){
+                listener.onImageReceived(imageBytes)
+            }
+        }catch (e: Exception){
+            Log.e(TAG, "Error receiving image", e)
+            listener.onError("Failed to receive image; ${e.message}")
         }
     }
 
@@ -196,7 +225,7 @@ class CameraSocketClient(
     fun takePhoto() = sendCommand("TAKE_PHOTO")
     fun stopVideoRecording() = sendCommand("RECORD")
     fun startVideoRecording() = sendCommand("RECORD")
-    fun switchCamera() = sendCommand("SWITCH_CAMERA")
+    fun flipCamera() = sendCommand("FLIP_CAMERA")
 
     fun shutdown() {
         disconnect()
@@ -223,7 +252,6 @@ class CameraSocketClient(
         fun onMessageReceived(message: String)
         fun onStatusUpdate(status:  String)
         fun onError(error: String)
+        fun onImageReceived(imageBytes: ByteArray)
     }
-
-
 }

@@ -2,7 +2,6 @@ package com.example.camerax
 
 import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.Menu
@@ -11,7 +10,6 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import com.example.camerax.databinding.ActivityMainBinding
 import com.example.camerax.server.CameraSocketServer
 import java.util.concurrent.ExecutorService
@@ -30,7 +28,6 @@ class MainActivity : AppCompatActivity() {
     private var isServerRunning = false
 
     private val activityResultLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-        // Handle Permission granted/rejected
         var permissionGranted = permissionHelper.handlePermissionResult(permissions)
         if (!permissionGranted) {
             Toast.makeText(
@@ -111,16 +108,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun startServer(){
         if(cameraSocketServer == null){
-            cameraSocketServer = CameraSocketServer(cameraExecutor){command ->
+            cameraSocketServer = CameraSocketServer(
+                cameraExecutor,
+                {command ->
                 runOnUiThread{
                     remoteCommandHandler.handleRemoteCommand(command)
                 }
-            }
+            },
+                {onPhotoRequested ->
+                runOnUiThread{
+                    cameraController.takePhoto(onPhotoRequested)
+                }
+            })
+
             cameraSocketServer?.start()
-
             isServerRunning = true
-            invalidateOptionsMenu() // Refresh menu
-
+            invalidateOptionsMenu()
             showServerInfoDialog()
         }
     }
@@ -182,18 +185,6 @@ class MainActivity : AppCompatActivity() {
         cameraController.updateCaptureButtonUI()
     }
 
-
-    private fun startSocketServer(){
-        if(cameraSocketServer == null){
-            cameraSocketServer = CameraSocketServer(cameraExecutor) { command ->
-                runOnUiThread {
-                    remoteCommandHandler.handleRemoteCommand(command)
-                }
-            }
-            cameraSocketServer?.start()
-        }
-
-    }
 
     override fun onDestroy() {
         super.onDestroy()

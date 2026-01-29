@@ -105,8 +105,8 @@
             <!-- Take Photo Button -->
             <ImageButton
                 android:id="@+id/buttonTakePhoto"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
                 android:layout_margin="8dp"
                 android:background="@drawable/capture_button"
                 android:contentDescription="Take Photo"
@@ -115,8 +115,8 @@
             <!-- Record/Stop Toggle Button (single button that changes) -->
             <ImageButton
                 android:id="@+id/buttonRecordToggle"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
                 android:layout_margin="8dp"
                 android:background="@drawable/video_button"
                 android:contentDescription="Start Recording"
@@ -125,13 +125,24 @@
             <!-- Switch Camera Button -->
             <ImageButton
                 android:id="@+id/buttonSwitchCamera"
-                android:layout_width="80dp"
-                android:layout_height="80dp"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
                 android:layout_margin="8dp"
                 android:background="@drawable/flip_button"
                 android:contentDescription="Switch Camera"
                 android:enabled="false"
                 android:src="@drawable/baseline_flip_camera_android_24" />
+            
+            <ImageButton
+                android:id="@+id/buttonViewPhoto"
+                android:layout_width="60dp"
+                android:layout_height="60dp"
+                android:layout_margin="8dp"
+                android:background="@drawable/flip_button"
+                android:src="@android:drawable/ic_menu_gallery"
+                android:contentDescription="View Photos"
+                android:enabled="false"
+                />
         </LinearLayout>
     </LinearLayout>
 

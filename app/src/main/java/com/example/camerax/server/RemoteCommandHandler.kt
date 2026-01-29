@@ -16,6 +16,7 @@ class RemoteCommandHandler(
                 Log.d(TAG, "Executing takePhoto() via remote command.")
                 // gọi trực tiếp logic chụp
                 viewBinding.captureButton.performClick()
+
             }
 
             "RECORD" -> {
