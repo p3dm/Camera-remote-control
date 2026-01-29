@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm") version "1.9.22"
     kotlin("plugin.serialization") version "1.9.22"
     application
-    id("com.github.johnrengelman.shadow") version "8.1.1"
+    id("com.gradleup.shadow") version "8.3.5"
 }
 
 group = "com.cameraRelay"
@@ -24,10 +24,13 @@ application {
     mainClass.set("com.cameraRelay.ApplicationKt")
 }
 
-tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
+tasks.named<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar>("shadowJar") {
     archiveBaseName.set("camera-relay-server")
     archiveClassifier.set("")
     archiveVersion.set("")
+    manifest {
+        attributes["Main-Class"] = "com.cameraRelay.ApplicationKt"
+    }
 }
 
 kotlin {
