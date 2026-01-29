@@ -1,0 +1,16 @@
+# Relay Server
+relay-server/build/
+relay-server/.gradle/
+relay-server/out/
+*.jar
+*.log
+
+# Gradle
+.gradle/
+build/
+
+# Android
+*.iml
+.idea/
+local.properties
+.DS_Store
