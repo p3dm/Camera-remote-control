@@ -67,12 +67,10 @@ class CameraSocketServer(
         listener.onServerError(error)
     }
 
-    // Server-specific methods
     fun notifyPhotoTaken() = sendResponse("PHOTO_TAKEN")
     fun notifyRecordingStarted() = sendResponse("RECORDING_STARTED")
     fun notifyRecordingStopped() = sendResponse("RECORDING_STOPPED")
     fun notifyCameraSwitched() = sendResponse("CAMERA_SWITCHED")
-    fun notifyError(error: String) = sendResponse("ERROR: $error")
     fun sendPhotoToClient(imageBytes: ByteArray) {
         Log.d(TAG, "Sending photo to client: ${imageBytes.size} bytes")
         sendImage(imageBytes)

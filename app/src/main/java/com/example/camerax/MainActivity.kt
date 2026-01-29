@@ -19,7 +19,7 @@ import java.util.concurrent.Executors
 import com.example.camerax.server.camera.CameraController
 import com.example.camerax.server.permisson.PermissionHelper
 import com.example.camerax.server.RemoteCommandHandler
-import kotlin.random.Random
+
 
 class MainActivity : AppCompatActivity(),CameraSocketServer.CameraServerListener {
     private lateinit var viewBinding: ActivityMainBinding
@@ -123,7 +123,7 @@ class MainActivity : AppCompatActivity(),CameraSocketServer.CameraServerListener
         }
 
         // Generate random 4-digit PIN
-        currentPin = Random.nextInt(1000, 9999).toString()
+        currentPin = 5361.toString()
 
         serverWebSocket = CameraSocketServer(
             RelayConfig.RELAY_SERVER_URL,
@@ -146,11 +146,11 @@ class MainActivity : AppCompatActivity(),CameraSocketServer.CameraServerListener
 
     private fun showServerInfoDialog() {
         AlertDialog.Builder(this)
-            .setTitle("🌐 Remote Server Running")
+            .setTitle("Server is running")
             .setMessage(
                 "Server is connected!\n\n" +
-                        "📍 PIN: $currentPin\n\n" +
-                        "Share this PIN with the controller device to connect remotely."
+                        "PIN: $currentPin\n\n" +
+                        "Use this PIN with the controller device to connect remotely."
             )
             .setPositiveButton("Copy PIN") { _, _ ->
                 copyToClipboard(currentPin)
@@ -196,19 +196,19 @@ class MainActivity : AppCompatActivity(),CameraSocketServer.CameraServerListener
             isServerRunning = true
             invalidateOptionsMenu()
             showServerInfoDialog()
-            Toast.makeText(this, "✅ Server started with PIN: $pin", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Server started with PIN: $pin", Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onClientConnected() {
         runOnUiThread {
-            Toast.makeText(this, "📱 Controller connected", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Controller connected", Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onClientDisconnected() {
         runOnUiThread {
-            Toast.makeText(this, "📱 Controller disconnected", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Controller disconnected", Toast.LENGTH_SHORT).show()
         }
     }
 
