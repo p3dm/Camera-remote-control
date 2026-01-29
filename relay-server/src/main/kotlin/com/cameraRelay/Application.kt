@@ -14,6 +14,7 @@ import kotlinx.serialization.SerializationException
 import org.slf4j.LoggerFactory
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.text.get
 
 private val logger = LoggerFactory.getLogger("CameraRelay")
 
@@ -235,8 +236,8 @@ fun Application.module() {
     install(WebSockets) {
         pingPeriod = Duration.ofSeconds(15)
         timeout = Duration.ofSeconds(30)
-        maxFrameSize = 1024 * 1024 // 1MB limit for JSON messages
-        masking = true
+        maxFrameSize = 10 * 1024 * 1024
+        masking = false
     }
 
     routing {
@@ -249,7 +250,7 @@ fun Application.module() {
                 Status: Running
                 Active Rooms: ${stats["totalRooms"]}
                 Active Connections: ${stats["activeConnections"]}
-                
+
                 WebSocket Endpoint: /camera-relay
                 Health Check: /health
                 """.trimIndent()
@@ -260,37 +261,37 @@ fun Application.module() {
             call.respondText("OK")
         }
 
-        webSocket("/camera-relay") {
+        webSocket("/camera-relay") {  // Đảm bảo route này đúng
             logger.info("New WebSocket connection established")
-            
+
             try {
                 for (frame in incoming) {
                     if (frame is Frame.Text) {
                         val text = frame.readText()
                         logger.debug("Received message: $text")
-                        
+
                         try {
                             val message = Json.decodeFromString<Message>(text)
-                            
+
                             when (message.type) {
                                 "CREATE_ROOM", "JOIN_ROOM" -> {
                                     val pin = message.pin
                                     val deviceType = message.deviceType
-                                    
+
                                     if (pin == null || deviceType == null) {
                                         send(Frame.Text(Json.encodeToString(
                                             Message(type = "ERROR", message = "PIN and deviceType are required")
                                         )))
                                         continue
                                     }
-                                    
+
                                     if (!pin.matches(Regex("\\d{4}"))) {
                                         send(Frame.Text(Json.encodeToString(
                                             Message(type = "ERROR", message = "PIN must be 4 digits")
                                         )))
                                         continue
                                     }
-                                    
+
                                     val result = RoomManager.createOrJoinRoom(this, pin, deviceType)
                                     if (result.startsWith("ERROR")) {
                                         send(Frame.Text(Json.encodeToString(
@@ -298,11 +299,11 @@ fun Application.module() {
                                         )))
                                     }
                                 }
-                                
+
                                 "COMMAND", "RESPONSE" -> {
                                     RoomManager.sendCommand(this, message)
                                 }
-                                
+
                                 else -> {
                                     logger.warn("Unknown message type: ${message.type}")
                                     send(Frame.Text(Json.encodeToString(

@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="CompilerConfiguration">
-    <bytecodeTargetLevel target="18" />
+    <bytecodeTargetLevel target="17">
+      <module name="camera-relay-server.app" target="18" />
+      <module name="CameraX.relay-server" target="17" />
+      <module name="CameraX.relay-server.main" target="17" />
+      <module name="CameraX.relay-server.test" target="17" />
+    </bytecodeTargetLevel>
   </component>
 </project>

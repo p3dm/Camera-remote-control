@@ -10,15 +10,21 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
     }
+    plugins {
+        kotlin("jvm") version "1.9.22"
+    }
+}
+plugins {
+    id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         google()
         mavenCentral()
     }
 }
 
-rootProject.name = "CameraX"
+rootProject.name = "app"
 include(":app")
 include(":relay-server")

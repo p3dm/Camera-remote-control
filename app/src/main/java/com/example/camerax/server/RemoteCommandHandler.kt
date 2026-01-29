@@ -23,10 +23,14 @@ class RemoteCommandHandler(
                     Log.d(TAG, "onPhotoCaptured invoked")
                 }
             }
-
             "RECORD" -> {
                 Log.d(TAG, "Executing captureVideo() via remote command.")
                 cameraController.switchToVideoMode()
+                viewBinding.captureButton.performClick()
+            }
+
+            "STOP_RECORD" -> {
+                Log.d(TAG, "Executing captureVideo() via remote command.")
                 viewBinding.captureButton.performClick()
             }
 

@@ -10,13 +10,14 @@ import android.view.MenuItem
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import com.example.camerax.client.CameraSocketClient
-class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClientListener {
+import com.example.camerax.config.RelayConfig
+import com.example.camerax.client.CameraControlSocket
 
-    private var client: CameraSocketClient? = null
+class RemoteControlActivity : AppCompatActivity(), CameraControlSocket.CameraControllerListener{
 
+    private var controllerWebSocket: CameraControlSocket? = null
     // UI Components
-    private lateinit var editTextServerIp: EditText
+    private lateinit var editTextPin: EditText
     private lateinit var textViewStatus: TextView
     private lateinit var buttonConnect: Button
     private lateinit var buttonTakePhoto: ImageButton
@@ -41,23 +42,37 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
 
     private fun saveImageToGallery(imageBytes: ByteArray) {
         try {
-            val contentResolver = contentResolver
+            Log.d(TAG, "Saving image to gallery: ${imageBytes.size} bytes")
+
             val contentValues = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, "IMG_${System.currentTimeMillis()}.jpg")
                 put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
                 put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/CameraX")
             }
 
-            val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
+            val uri = contentResolver.insert(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                contentValues
+            )
+
             uri?.let {
                 contentResolver.openOutputStream(it)?.use { outputStream ->
                     outputStream.write(imageBytes)
+                    outputStream.flush()
                 }
-                Toast.makeText(this, "Photo saved to gallery", Toast.LENGTH_SHORT).show()
+
+                Log.d(TAG, "Image saved successfully: $uri")
+
             }
         } catch (e: Exception) {
-            Log.e("RemoteControl", "Error saving image", e)
-
+            Log.e(TAG, "Error saving image", e)
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "❌ Failed to save image: ${e.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -67,18 +82,17 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
             buttonTakePhoto.isEnabled = enabled
             buttonRecordToggle.isEnabled = enabled
             buttonSwitchCamera.isEnabled = enabled
-            buttonViewPhoto.isEnabled = enabled
 
             val alpha = if (enabled) 1.0f else 0.5f
             buttonTakePhoto.alpha = alpha
             buttonRecordToggle.alpha = alpha
             buttonSwitchCamera.alpha = alpha
-            buttonViewPhoto.alpha = alpha
+
         }
     }
 
     private fun initViews() {
-        editTextServerIp = findViewById(R.id.editTextServerIp)
+        editTextPin = findViewById(R.id.editTextServerIp)
         textViewStatus = findViewById(R.id.textViewStatus)
         buttonConnect = findViewById(R.id.buttonConnect)
         buttonTakePhoto = findViewById(R.id.buttonTakePhoto)
@@ -90,67 +104,71 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
     private fun setupListeners() {
         buttonConnect.setOnClickListener {
             if (isConnected) {
-                // Đang kết nối -> Ngắt kết nối
-                client?.disconnect()
+                disconnect()
             } else {
-                // Chưa kết nối -> Kết nối
-                val serverIp = editTextServerIp.text.toString().trim()
-                if (serverIp.isNotEmpty()) {
-                    client = CameraSocketClient(serverIp, 2000, this)
-                    client?.connect()
-                    updateStatus("⏳ Connecting to $serverIp:2000...")
-                } else {
-                    Toast.makeText(this, "Please enter server IP", Toast.LENGTH_SHORT).show()
-                }
+                connect()
             }
         }
 
         buttonTakePhoto.setOnClickListener {
-            client?.takePhoto()
+            controllerWebSocket?.takePhoto()
             updateStatus("📷 Taking photo...")
-            flashScreen()
         }
 
         buttonRecordToggle.setOnClickListener {
-            if (isRecording) {
-                // Đang quay -> Dừng quay
-                client?.stopVideoRecording()
-                updateStatus("⏹️ Stopping recording...")
-                isRecording = false
-                // Đổi về icon video_button (màu đỏ tròn)
-                buttonRecordToggle.setBackgroundResource(R.drawable.video_button)
-                buttonRecordToggle.contentDescription = "Start Recording"
-            } else {
-                // Không quay -> Bắt đầu quay
-                client?.startVideoRecording()
-                updateStatus("🎥 Starting recording...")
+            if (!isRecording) {
+                controllerWebSocket?.startRecording()
                 isRecording = true
-                // Đổi sang icon recording_button (vuông đỏ trong tròn)
-                buttonRecordToggle.setBackgroundResource(R.drawable.recording_button)
-                buttonRecordToggle.contentDescription = "Stop Recording"
+                buttonRecordToggle.setImageResource(R.drawable.video_button)
+                updateStatus("🎥 Recording...")
+            } else {
+                controllerWebSocket?.stopRecording()
+                isRecording = false
+                buttonRecordToggle.setImageResource(R.drawable.recording_button)
+                updateStatus("⏹ Recording stopped")
             }
         }
 
         buttonSwitchCamera.setOnClickListener {
-            client?.flipCamera()
+            controllerWebSocket?.switchCamera()
             updateStatus("🔄 Switching camera...")
         }
 
         buttonViewPhoto.setOnClickListener {
-            // Mở gallery hoặc hiển thị ảnh vừa chụp
             openGallery()
         }
     }
+    private fun connect() {
+        val pin = editTextPin.text.toString().trim()
 
-    private fun flashScreen() {
-        // Hiệu ứng flash khi chụp ảnh
-        window.decorView.animate()
-            .alpha(0.5f)
-            .setDuration(100)
-            .withEndAction {
-                window.decorView.animate().alpha(1f).setDuration(100).start()
-            }
-            .start()
+        if (pin.length != 4 || !pin.all { it.isDigit() }) {
+            Toast.makeText(this, "PIN must be 4 digits", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        controllerWebSocket = CameraControlSocket(
+            RelayConfig.RELAY_SERVER_URL,
+            pin,
+            this
+        )
+
+        controllerWebSocket?.connect()
+        updateStatus("⏳ Connecting to PIN: $pin...")
+        editTextPin.isEnabled = false
+        buttonConnect.isEnabled = false
+    }
+
+    private fun disconnect() {
+        controllerWebSocket?.disconnect()
+        controllerWebSocket?.shutdown()
+        controllerWebSocket = null
+        isConnected = false
+
+        editTextPin.isEnabled = true
+        buttonConnect.isEnabled = true
+        buttonConnect.text = "Connect"
+        setControlsEnabled(false)
+        updateStatus("Disconnected")
     }
 
     private fun updateStatus(status: String) {
@@ -159,38 +177,64 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
         }
     }
 
-    // CameraClientListener implementation
-    override fun onConnectionChanged(isConnected: Boolean) {
-        if (this.isConnected == isConnected) return
+    override fun onConnected() {
         runOnUiThread {
-            this.isConnected = isConnected
+            isConnected = true
+            buttonConnect.text = "Disconnect"
+            buttonConnect.isEnabled = true
+            setControlsEnabled(true)
+            updateStatus("✅ Connected successfully!")
+            Toast.makeText(this, "Connected to camera", Toast.LENGTH_SHORT).show()
+        }
+    }
 
-            // Cập nhật nút Connect/Disconnect
-            if (isConnected) {
-                buttonConnect.text = "Disconnect"
-                setControlsEnabled(true)
-                editTextServerIp.isEnabled = false
-            } else {
-                buttonConnect.text = "Connect"
-                editTextServerIp.isEnabled = true
-                setControlsEnabled(true)
-                // Reset recording state when disconnected
-                isRecording = false
-                buttonRecordToggle.setBackgroundResource(R.drawable.video_button)
-                buttonRecordToggle.contentDescription = "Start Recording"
+    override fun onDisconnected() {
+        runOnUiThread {
+            isConnected = false
+            buttonConnect.text = "Connect"
+            buttonConnect.isEnabled = true
+            setControlsEnabled(false)
+            updateStatus("❌ Disconnected")
+            Toast.makeText(this, "Disconnected from camera", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onServerDisconnected() {
+        runOnUiThread {
+            Toast.makeText(this, "Camera server disconnected", Toast.LENGTH_LONG).show()
+            disconnect()
+        }
+    }
+
+    override fun onResponseReceived(response: String) {
+        runOnUiThread {
+            when (response) {
+                "PHOTO_TAKEN" -> {
+                    updateStatus("✅ Photo captured! Receiving image...")
+                }
+                "RECORDING_STARTED" -> {
+                    isRecording = true
+                    buttonRecordToggle.setImageResource(R.drawable.recording_button)
+                    updateStatus("✅ Recording started")
+                }
+                "RECORDING_STOPPED" -> {
+                    isRecording = false
+                    buttonRecordToggle.setImageResource(R.drawable.video_button)
+                    updateStatus("✅ Recording stopped")
+                }
+                "CAMERA_SWITCHED" -> {
+                    updateStatus("✅ Camera switched")
+                }
+                else -> {
+                    if (response.startsWith("ERROR:")) {
+                        val error = response.substringAfter("ERROR:")
+                        updateStatus("❌ Error: $error")
+                        Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+                    } else {
+                        updateStatus("📨 $response")
+                    }
+                }
             }
-
-            // Enable/disable control buttons
-            val controlButtons = listOf(
-                buttonTakePhoto, buttonRecordToggle, buttonSwitchCamera
-            )
-            controlButtons.forEach { it.isEnabled = isConnected }
-
-            // Cập nhật status
-            val status = if (isConnected) "✅ Connected successfully!" else "❌ Disconnected"
-            updateStatus(status)
-
-            Toast.makeText(this, status, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -204,13 +248,12 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             android.R.id.home -> {
-                // Xử lý back button
                 if (isConnected) {
                     AlertDialog.Builder(this)
                         .setTitle("Disconnect?")
-                        .setMessage("Do you want to disconnect from server?")
+                        .setMessage("Do you want to disconnect from the camera?")
                         .setPositiveButton("Yes") { _, _ ->
-                            client?.disconnect()
+                            disconnect()
                             finish()
                         }
                         .setNegativeButton("No", null)
@@ -224,30 +267,33 @@ class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClie
         }
     }
 
-    override fun onMessageReceived(message: String) {
-        updateStatus("📨 $message")
-    }
-
-    override fun onStatusUpdate(status: String) {
-        updateStatus("ℹ️ $status")
-    }
-
-    override fun onError(error: String) {
+    override fun onImageReceived(imageBytes: ByteArray) {
+        Log.d(TAG, "Image received: ${imageBytes.size} bytes")
         runOnUiThread {
-            updateStatus("⚠️ Error: $error")
-            Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+            updateStatus("📷 Image received! Saving...")
+            saveImageToGallery(imageBytes)
         }
     }
 
-    override fun onImageReceived(imageBytes: ByteArray) {
+    override fun onConnectionError(error: String) {
         runOnUiThread {
-            saveImageToGallery(imageBytes)
-            updateStatus("📷 Image received and saved!")
+            updateStatus("❌ Error: $error")
+            Toast.makeText(this, error, Toast.LENGTH_LONG).show()
+
+            editTextPin.isEnabled = true
+            buttonConnect.isEnabled = true
+            buttonConnect.text = "Connect"
+            setControlsEnabled(false)
         }
     }
 
     override fun onDestroy() {
-        client?.shutdown()
         super.onDestroy()
+        controllerWebSocket?.shutdown()
     }
+
+    companion object {
+        private const val TAG = "RemoteControlActivity"
+    }
+
 }
