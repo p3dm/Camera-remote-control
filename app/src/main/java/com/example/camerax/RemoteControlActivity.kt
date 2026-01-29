@@ -10,11 +10,7 @@ import android.view.MenuItem
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.camera.core.ImageAnalysis
 import com.example.camerax.client.CameraSocketClient
-import kotlin.text.insert
-
-
 class RemoteControlActivity : AppCompatActivity(), CameraSocketClient.CameraClientListener {
 
     private var client: CameraSocketClient? = null

@@ -16,6 +16,7 @@ class CameraSocketServer (
     private val executor: ExecutorService,
     private val commandHandler: (String) -> Unit,
     private val onClientConnected: () -> Unit = {}
+
 ) {
     companion object {
         private const val TAG = "CameraSocketServer"
